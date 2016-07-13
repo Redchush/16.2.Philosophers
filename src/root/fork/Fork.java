@@ -6,10 +6,10 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Fork {
 
-    private int id;
+    private int id;  // identificator to differ the forks
     private Lock lock;
     private Condition condition;
-    private volatile boolean taken;
+    private volatile boolean taken;  //is the fork is taken by philosopher
 
     public Fork(int id) {
         this.id = id;

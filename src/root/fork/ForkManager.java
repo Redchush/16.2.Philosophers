@@ -1,45 +1,93 @@
 package root.fork;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import root.philosopher.Philosopher;
+
+import java.util.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 
 public class ForkManager {
 
-    private static List<Fork> forks;
-    private int forksSize;
+    private final List<Fork> forks;
 
     public ForkManager(int forksSize) {
-        this.forksSize = forksSize;
-        forks = new ArrayList<>(forksSize);
+        List<Fork> list = new ArrayList<>(forksSize);
         for (int i = 0; i < forksSize ; i++) {
             Fork fork = new Fork(i);
-            forks.add(fork);
+            list.add(fork);
         }
+        forks = Collections.unmodifiableList(list);
     }
 
-    public void takeFork(int id) throws InterruptedException {
-        Fork fork = forks.get(id);
+    /**
+     * @param philosopher : philosopher who want to take a fork
+     * @param isRight : whether the philosopher drop the right or left fork
+     * @throws InterruptedException
+     */
+
+    public int takeFork(Philosopher philosopher, boolean isRight) throws InterruptedException {
+        int forkId = isRight ? getRightForkByPhilosopher(philosopher)
+                             : getLeftForkByPhilosopher(philosopher);
+
+        Fork fork = forks.get(forkId);
         Lock lock = fork.getLock();
         Condition condition =  fork.getCondition();
         try{
-            lock.lock();
-            while (fork.isTaken()){
+            lock.lock();                    //block the fork
+            while (fork.isTaken()){         //if fork is taken -> wait for it setted free
                 condition.await();
             }
-            fork.setTaken(true);
+            fork.setTaken(true);              //change the state of fork marking at as taken
           } finally {
-            lock.unlock();
+            lock.unlock();                    //leave the fork mutex
         }
 
+        return forkId;
     }
-    public synchronized void dropFork(int id){
-        Fork fork = forks.get(id);
-        fork.setTaken(false);
-        fork.getCondition().signalAll();
+
+    /**
+     *
+     * @param philosopher  : philosopher who want to take a fork
+     * @param isRight : whether the philosopher drop the right or left fork
+     * @throws InterruptedException
+     */
+    public void dropFork (Philosopher philosopher, boolean isRight) throws InterruptedException {
+        int forkId = isRight ? getRightForkByPhilosopher(philosopher) //define the fork that must be taken
+                             : getLeftForkByPhilosopher(philosopher);
+        Fork fork = forks.get(forkId);                   //get fork by id from storage
+
+        Lock lock = fork.getLock();
+        try {
+            fork.getLock().lock();
+            fork.setTaken(false);                         //mark the fork as taken
+            fork.getCondition().signalAll();                //signal all other philosophers that fork is free now
+        } finally {
+            lock.unlock();                             //leave the fork mutex
+        }
     }
+
+    /**
+     *
+     * @param philosopher
+     * @return the appropriate right forkId for this philosopher
+     * @throws InterruptedException
+     */
+    private int getRightForkByPhilosopher(Philosopher philosopher) throws InterruptedException {
+        return philosopher.getId();  //right fork id is equals to philosopher id
+    }
+
+    /**
+     *
+     * @param phiosopher
+     * @return the appropriate left forkId for this philosopher
+     * @throws InterruptedException
+     */
+    private int getLeftForkByPhilosopher(Philosopher phiosopher) throws InterruptedException{
+        int id = phiosopher.getId();
+        int forkId = (id == 0)? forks.size() - 1 : (id - 1);  // left fork id is equals philosopher id - 1, so to the
+                                                                // first  philosopher (id = 0) grab last fork to make a circle
+        return forkId;
+    }
+
 
 }
